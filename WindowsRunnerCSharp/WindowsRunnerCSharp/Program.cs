@@ -7,6 +7,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using Microsoft.Playfab.Gaming.GSDK.CSharp;
 using Newtonsoft.Json;
+using PlayFab;
 
 namespace WindowsRunnerCSharp
 {
@@ -18,12 +19,13 @@ namespace WindowsRunnerCSharp
     class Program
     {
         private static HttpListener _listener = new HttpListener();
-        const string ListeningPortKey = "game_port";
-        
+        const string ListeningPortKey = "game";
+
         const string AssetFilePath = @"C:\Assets\testassetfile.txt";
         private const string GameCertAlias = "winRunnerTestCert";
 
         private static List<ConnectedPlayer> players = new List<ConnectedPlayer>();
+        private static List<string> matchPlayers = new List<string>();
         private static int requestCount = 0;
 
         private static bool _isActivated = false;
@@ -50,8 +52,11 @@ namespace WindowsRunnerCSharp
             _nextMaintenance = time;
         }
 
-        static void Main(string[] args)
+        static async System.Threading.Tasks.Task Main(string[] args)
         {
+            PlayFabSettings.staticSettings.TitleId = "51E7";
+            PlayFabSettings.staticSettings.DeveloperSecretKey = "PE8A76T6WSPXIR1MXWS13NBNFIWJQUGKOOUPYPJK7GZP5KTX51";
+
             // GSDK Setup
             try
             {
@@ -72,6 +77,10 @@ namespace WindowsRunnerCSharp
             GameserverSDK.RegisterHealthCallback(IsHealthy);
             GameserverSDK.RegisterMaintenanceCallback(OnMaintenanceScheduled);
 
+
+            //Read arguments
+            LogMessage("Arguments are: " + string.Join(" ", args));
+
             // Read our asset file
             if (File.Exists(AssetFilePath))
             {
@@ -79,6 +88,8 @@ namespace WindowsRunnerCSharp
             }
 
             IDictionary<string, string> initialConfig = GameserverSDK.getConfigSettings();
+
+            LogMessage("InitialConfig before ReadyForPlayers: \n" + JsonConvert.SerializeObject(initialConfig, Formatting.Indented));
 
             // Start the http server
             if (initialConfig?.ContainsKey(ListeningPortKey) == true)
@@ -131,6 +142,43 @@ namespace WindowsRunnerCSharp
                 {
                     LogMessage($"The session cookie from the allocation call is: {sessionCookie}");
                 }
+
+                if (activeConfig.TryGetValue(GameserverSDK.SessionIdKey, out string sessionId))
+                {
+                    LogMessage($"The session Id from the allocation call is: {sessionId}");
+
+                    //Get Title Entity Token
+                    var entityToken = await PlayFabAuthenticationAPI.GetEntityTokenAsync(new PlayFab.AuthenticationModels.GetEntityTokenRequest());
+
+                    if (entityToken.Error == null)
+                    {
+                        var matchResult = await PlayFabMultiplayerAPI.GetMatchAsync(new PlayFab.MultiplayerModels.GetMatchRequest { MatchId = sessionId, QueueName = "4PlayersTest", ReturnMemberAttributes = true });
+                        if (matchResult.Error == null)
+                        {
+                            LogMessage(JsonConvert.SerializeObject(matchResult.Result, Formatting.Indented));
+                            matchPlayers = matchResult.Result.Members.Select(m => m.Entity.Id).ToList();
+                            LogMessage($"MatchPlayers are: {string.Join(", ", matchPlayers)}");
+                        }
+                        else
+                        {
+                            LogMessage($"matchResult error: {matchResult.Error.GenerateErrorReport()}");
+                        }
+                    }
+                    else
+                    {
+                        LogMessage($"entityToken error: {entityToken.Error.GenerateErrorReport()}");
+                    }
+                }
+
+                LogMessage("ActiveConfig after ReadyForPlayers: \n" + JsonConvert.SerializeObject(activeConfig, Formatting.Indented));
+
+                var initialPlayers = GameserverSDK.GetInitialPlayers();
+
+                LogMessage($"In this match there are {initialPlayers.Count} players. They are:");
+                foreach (var item in initialPlayers)
+                {
+                    LogMessage(item);
+                }
             }
             else
             {
@@ -155,28 +203,37 @@ namespace WindowsRunnerCSharp
                     string requestMessage = $"HTTP:Received {request.Headers.ToString()}";
                     LogMessage(requestMessage);
 
-                    IDictionary<string, string> config = null;
+                    var initialPlayers = GameserverSDK.GetInitialPlayers();
+                    LogMessage($"There are {initialPlayers.Count} initialPlayers. They are: {string.Join(", ", initialPlayers)}");
 
-                    // For each request, "add" a connected player, but limit player count to 20.
-                    const int maxPlayers = 20;
-                    if (players.Count < maxPlayers )
+                    var playerId = request.Headers.GetValues("token")?[0];
+                    LogMessage($"playerId got from http header: {playerId}");
+
+                    if (playerId == null || !matchPlayers.Contains(playerId))
                     {
-                        players.Add(new ConnectedPlayer("gamer" + requestCount));
-                    }
-                    else
-                    {
-                        LogMessage($"Player not added since max of {maxPlayers} is reached. Current request count: {requestCount}.");
+                        response.AddHeader("token", playerId);
+                        response.StatusCode = 403;
+                        response.Close();
+                        continue;
                     }
 
-                    requestCount++;
+                    players.Add(new ConnectedPlayer(playerId));
                     GameserverSDK.UpdateConnectedPlayers(players);
 
+                    requestCount++;
+                    LogMessage($"Player count: {players.Count}. Current request count: {requestCount}.");
+
+                    IDictionary<string, string> config = null;
+
                     config = GameserverSDK.getConfigSettings() ?? new Dictionary<string, string>();
-                    
+
                     config.Add("isActivated", _isActivated.ToString());
                     config.Add("assetFileText", _assetFileText);
                     config.Add("logsDirectory", GameserverSDK.GetLogsDirectory());
                     config.Add("installedCertThumbprint", _installedCertThumbprint);
+
+                    config.Add("InitialPlayers", string.Join(", ", matchPlayers));
+                    config.Add("ConnectedPlayers", string.Join(", ", players.Select(p => p.PlayerId)));
 
                     if (_nextMaintenance != DateTimeOffset.MinValue)
                     {
