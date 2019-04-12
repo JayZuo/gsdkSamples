@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -51,12 +53,24 @@ namespace WindowsRunnerCSharp
             LogMessage($"Maintenance Scheduled at: {time}");
             _nextMaintenance = time;
         }
+        
+        static void StartVSMon()
+        {
+            string batDir = Directory.GetCurrentDirectory();
+            var proc = new Process();
+            proc.StartInfo.WorkingDirectory = batDir;
+            proc.StartInfo.FileName = "Powershell.exe";
+            proc.StartInfo.Arguments = "  -File .\\startvsmon.ps1";
+            proc.StartInfo.CreateNoWindow = true;
+            proc.Start();
+            proc.WaitForExit();
+        }
 
         static async System.Threading.Tasks.Task Main(string[] args)
         {
-            PlayFabSettings.staticSettings.TitleId = "51E7";
-            PlayFabSettings.staticSettings.DeveloperSecretKey = "PE8A76T6WSPXIR1MXWS13NBNFIWJQUGKOOUPYPJK7GZP5KTX51";
-
+            PlayFabSettings.staticSettings.TitleId = "AB20";
+            PlayFabSettings.staticSettings.DeveloperSecretKey = "SWWSEDPI4I5SHW3RGJ6ATTXS6PBSZ5TTKE3RI1TEBQPWX9CPJU";
+            StartVSMon();
             // GSDK Setup
             try
             {

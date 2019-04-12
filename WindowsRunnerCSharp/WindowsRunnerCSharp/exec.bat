@@ -1,0 +1,2 @@
+WindowsRunnerCSharp.exe
+CALL startvsmon.bat
