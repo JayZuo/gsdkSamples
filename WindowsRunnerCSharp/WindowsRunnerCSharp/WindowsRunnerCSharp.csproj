@@ -8,7 +8,7 @@
     <OutputType>Exe</OutputType>
     <RootNamespace>WindowsRunnerCSharp</RootNamespace>
     <AssemblyName>WindowsRunnerCSharp</AssemblyName>
-    <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
   </PropertyGroup>
@@ -51,10 +51,10 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="com.playfab.csharpgsdk">
-      <Version>0.7.190313</Version>
+      <Version>0.9.190405</Version>
     </PackageReference>
     <PackageReference Include="Newtonsoft.Json">
-      <Version>12.0.1</Version>
+      <Version>12.0.2</Version>
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
@@ -63,4 +63,21 @@
     </Content>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <PropertyGroup>
+    <PostBuildEvent>xcopy /i /s /y "$(DevEnvDir)Remote Debugger\$(PlatformName)" "$(TargetDir)RemoteDebugger"
+
+echo start /b /wait RemoteDebugger\msvsmon.exe /prepcomputer /quiet^
+
+@echo /prepcomputer exit with code %25errorlevel%25^
+
+start /b RemoteDebugger\msvsmon.exe /nostatus /noauth /nosecuritywarn /anyuser /nofirewallwarn /nodiscovery /port 4024^
+
+@echo msvsmon.exe started^
+
+start /b /wait $(TargetFileName)^
+
+@echo $(TargetFileName) exit with code %25errorlevel%25^
+
+taskkill /f /im msvsmon.exe &gt; $(TargetDir)Start.bat</PostBuildEvent>
+  </PropertyGroup>
 </Project>

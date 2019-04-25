@@ -28,6 +28,13 @@ To run this sample locally:
 2. Once the local agent is running, run the WindowsRunnerCSharp executable as administrator.
 3. Open any browser, and navigate to http://localhost:3600, you should see a json body with details about the game server.
 
+To remotely debug:
+1. We used post-build event to add Remote Debugging tools and batch file as the Game Start command, you can edit port(4024 by default) and batch file name as you want.
+2. Build this solution as **Debug|x64**.
+3. Configure Build in GM normally, but in **Network** add an new **Port** "4024" with **Name** like "Debug" and **Protocol** to "TCP".
+4. Upload assets as usual, but change the **Start game command** to your batch file like *C:\Assets\Start.bat*.
+5. When you request a server, **Attach to Process** with **No Authentication** mode and set **Connection target** to the returned "IPV4Address" plus "Debug" port.
+
 **Known Limitations**
 * Currently, this sample will only work locally if you are also running the local agent. If you see a GSDK Exception on initialization, make sure the local agent is running.
 * If you continue to see an issue repeatedly after starting the local agent or changing the MultiplayerSettings.json file, close the program (Visual Studio, Powershell,
